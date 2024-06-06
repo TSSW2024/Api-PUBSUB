@@ -29,6 +29,12 @@ func (store *MessageStore) GetMessages() []string {
 	return append([]string{}, store.messages...)
 }
 
+// Estructura para el cuerpo JSON de la solicitud
+type MessageRequest struct {
+	Topic   string `json:"my-topic"`
+	Message string `json:"message"`
+}
+
 // Configuración del servidor HTTP
 func setupRouter(pubsubClient *pubsub.Client, store *MessageStore) *gin.Engine {
 	r := gin.Default()
@@ -40,9 +46,13 @@ func setupRouter(pubsubClient *pubsub.Client, store *MessageStore) *gin.Engine {
 
 	// Endpoint para publicar un mensaje
 	r.POST("/publish", func(c *gin.Context) {
-		topicName := c.PostForm("my-topic")
-		message := c.PostForm("message")
-		err := publishMessage(context.Background(), pubsubClient, topicName, message)
+		var messageReq MessageRequest
+		if err := c.BindJSON(&messageReq); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		err := publishMessage(c.Request.Context(), pubsubClient, messageReq.Topic, messageReq.Message)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"status": "failed", "error": err.Error()})
 		} else {
