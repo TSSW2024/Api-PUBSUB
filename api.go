@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"sync"
 
 	"cloud.google.com/go/pubsub"
 	"github.com/gin-gonic/gin"
+	"google.golang.org/api/option"
 )
 
 // Estructura para almacenar los mensajes en memoria
@@ -98,17 +100,16 @@ func subscribeMessages(ctx context.Context, client *pubsub.Client, subscriptionN
 }
 
 func main() {
-	// Crear el cliente Pub/Sub
 	ctx := context.Background()
-	client, err := pubsub.NewClient(ctx, "tss-1s2024")
+	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
+
+	client, err := pubsub.NewClient(ctx, projectID, option.WithCredentialsFile("path/to/service-account-file.json"))
 	if err != nil {
 		log.Fatalf("Failed to create client: %v", err)
 	}
 
-	// Crear el almacenamiento de mensajes
 	store := &MessageStore{}
 
-	// Iniciar el servidor HTTP
 	r := setupRouter(client, store)
 	go func() {
 		if err := r.Run(":8090"); err != nil {
@@ -116,6 +117,5 @@ func main() {
 		}
 	}()
 
-	// Suscribirse a mensajes (esto puede correr en un goroutine separado si lo deseas)
 	subscribeMessages(ctx, client, "my-sub", store)
 }

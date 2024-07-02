@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-pubsub
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api-pubsub
+  template:
+    metadata:
+      labels:
+        app: api-pubsub
+    spec:
+      containers:
+      - name: api-pubsub
+        image: {IMAGE_TAG}
+        ports:
+        - containerPort: 8090
+        resources:
+          # You must specify requests for CPU to autoscale
+          # based on CPU utilization
+          limits:
+            cpu: 50m
+            memory: 128Mi
+          requests:
+            cpu: 50m
+            memory: 128Mi
