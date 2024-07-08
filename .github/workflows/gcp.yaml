@@ -13,11 +13,17 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v4
+    - name: create-json
+      id: create-json
+      uses: jsdaniell/create-json@v1.2.3
+      with:
+        name: "service_account.json"
+        json: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
+
     - name: Create .env file
       run: |
         echo "GOOGLE_CLOUD_PROJECT=${{ secrets.GOOGLE_CLOUD_PROJECT }}" >> .env
-        echo "GOOGLE_APPLICATION_CREDENTIALS=${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}" >> .env
-      working-directory: ${{ github.workspace }}
+      working-directory: ${{ github.workspace }}
 
 
     - name: Authenticate with gcloud CLI
