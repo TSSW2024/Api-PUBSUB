@@ -112,7 +112,7 @@ func subscribeMessages(ctx context.Context, client *pubsub.Client, subscriptionN
 
 // Función para enviar notificaciones periódicas
 func startPeriodicNotifications(pubsubClient *pubsub.Client, topicName string) {
-	ticker := time.NewTicker(5 * time.Minute)
+	ticker := time.NewTicker(2 * time.Minute)
 	defer ticker.Stop()
 
 	for range ticker.C {
