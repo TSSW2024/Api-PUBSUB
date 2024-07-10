@@ -203,5 +203,5 @@ func main() {
 
 	go startPeriodicNotifications(client, "my-topic")
 
-	subscribeMessages(ctx, client, "my-sub", store)
+	subscribeMessages(ctx, client, "projects/tss-1s2024/subscriptions/my-sub", store)
 }
