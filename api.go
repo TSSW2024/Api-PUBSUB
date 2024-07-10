@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -32,14 +33,7 @@ func (store *MessageStore) AddMessage(message string) {
 func (store *MessageStore) GetMessages() []string {
 	store.mu.RLock()
 	defer store.mu.RUnlock()
-
-	var filteredMessages []string
-	for _, msg := range store.messages {
-		if msg == "Revisa tus monedas de seguimiento si han cambiado" {
-			filteredMessages = append(filteredMessages, msg)
-		}
-	}
-	return filteredMessages
+	return append([]string{}, store.messages...)
 }
 
 // Estructura para el cuerpo JSON de la solicitud
@@ -104,9 +98,24 @@ func publishMessage(ctx context.Context, client *pubsub.Client, topicName string
 	return nil
 }
 
+// Suscribirse a mensajes de Pub/Sub y almacenar solo los mensajes deseados
+func subscribeMessages(ctx context.Context, client *pubsub.Client, subscriptionName string, store *MessageStore) {
+	sub := client.Subscription(subscriptionName)
+	err := sub.Receive(ctx, func(ctx context.Context, msg *pubsub.Message) {
+		log.Printf("Got message: %q\n", string(msg.Data))
+		if strings.Contains(string(msg.Data), "Revisa tus monedas de seguimiento si han cambiado") {
+			store.AddMessage(string(msg.Data))
+		}
+		msg.Ack()
+	})
+	if err != nil {
+		log.Fatalf("Failed to receive messages: %v", err)
+	}
+}
+
 // Función para enviar notificaciones periódicas
 func startPeriodicNotifications(pubsubClient *pubsub.Client, topicName string) {
-	ticker := time.NewTicker(8 * time.Hour)
+	ticker := time.NewTicker(2 * time.Minute)
 	defer ticker.Stop()
 
 	for range ticker.C {
@@ -121,6 +130,15 @@ func sendPeriodicNotification(pubsubClient *pubsub.Client, topicName string) {
 		log.Printf("Failed to send periodic notification: %v", err)
 	} else {
 		log.Printf("Sent periodic notification: Revisa tus monedas de seguimiento si han cambiado")
+	}
+
+	// Enviar notificación de las monedas más rankeadas
+	topCoins := getTopRankedCoins()
+	err = publishMessage(context.Background(), pubsubClient, topicName, fmt.Sprintf("Monedas más rankeadas: %v", topCoins))
+	if err != nil {
+		log.Printf("Failed to send top ranked coins notification: %v", err)
+	} else {
+		log.Printf("Sent top ranked coins notification: %v", topCoins)
 	}
 }
 
@@ -169,7 +187,7 @@ func main() {
 
 	ctx := context.Background()
 	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
-	credentialsFile := "service_account.json" // Nombre del archivo generado por GitHub Actions
+	credentialsFile := "service_account.json" // Usar el archivo JSON de la cuenta de servicio generado
 
 	client, err := pubsub.NewClient(ctx, projectID, option.WithCredentialsFile(credentialsFile))
 	if err != nil {
@@ -188,5 +206,5 @@ func main() {
 
 	go startPeriodicNotifications(client, "my-topic")
 
-	subscribeMessages(ctx, client, "projects/tss-1s2024/subscriptions/my-sub", store)
+	subscribeMessages(ctx, client, "my-sub", store)
 }
