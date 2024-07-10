@@ -184,7 +184,7 @@ func main() {
 
 	ctx := context.Background()
 	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
-	credentialsFile := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
+	credentialsFile := "service_account.json"
 
 	client, err := pubsub.NewClient(ctx, projectID, option.WithCredentialsFile(credentialsFile))
 	if err != nil {
