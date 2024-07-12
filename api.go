@@ -2,13 +2,10 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
-	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -70,13 +67,13 @@ func setupRouter(pubsubClient *pubsub.Client, store *MessageStore) *gin.Engine {
 		c.JSON(http.StatusOK, gin.H{"messages": messages})
 	})
 
-	r.GET("/top-coins", func(c *gin.Context) {
-		topCoins := getTopRankedCoins()
-		c.JSON(http.StatusOK, gin.H{"top_coins": topCoins})
+	r.GET("/notify-check-coins", func(c *gin.Context) {
+		sendNotification(pubsubClient, "my-topic", "Revisa tus monedas de seguimiento si han cambiado")
+		c.JSON(http.StatusOK, gin.H{"status": "success"})
 	})
 
-	r.GET("/periodic", func(c *gin.Context) {
-		sendPeriodicNotification(pubsubClient, "my-topic")
+	r.GET("/notify-open-box", func(c *gin.Context) {
+		sendNotification(pubsubClient, "my-topic", "Ten tu oportunidad de jugar y abrir una caja")
 		c.JSON(http.StatusOK, gin.H{"status": "success"})
 	})
 
@@ -98,14 +95,12 @@ func publishMessage(ctx context.Context, client *pubsub.Client, topicName string
 	return nil
 }
 
-// Suscribirse a mensajes de Pub/Sub y almacenar solo los mensajes deseados
+// Suscribirse a mensajes de Pub/Sub y almacenar todos los mensajes
 func subscribeMessages(ctx context.Context, client *pubsub.Client, subscriptionName string, store *MessageStore) {
 	sub := client.Subscription(subscriptionName)
 	err := sub.Receive(ctx, func(ctx context.Context, msg *pubsub.Message) {
 		log.Printf("Got message: %q\n", string(msg.Data))
-		if strings.Contains(string(msg.Data), "Revisa tus monedas de seguimiento si han cambiado") {
-			store.AddMessage(string(msg.Data))
-		}
+		store.AddMessage(string(msg.Data))
 		msg.Ack()
 	})
 	if err != nil {
@@ -115,69 +110,29 @@ func subscribeMessages(ctx context.Context, client *pubsub.Client, subscriptionN
 
 // Función para enviar notificaciones periódicas
 func startPeriodicNotifications(pubsubClient *pubsub.Client, topicName string) {
-	ticker := time.NewTicker(8 * time.Hour)
-	defer ticker.Stop()
+	tickerCheckCoins := time.NewTicker(8 * time.Hour) // Notificaciones cada 8 horas
+	tickerOpenBox := time.NewTicker(10 * time.Hour)   // Notificaciones cada 10 horas
+	defer tickerCheckCoins.Stop()
+	defer tickerOpenBox.Stop()
 
-	for range ticker.C {
-		sendPeriodicNotification(pubsubClient, topicName)
+	for {
+		select {
+		case <-tickerCheckCoins.C:
+			sendNotification(pubsubClient, topicName, "Revisa tus monedas de seguimiento si han cambiado")
+		case <-tickerOpenBox.C:
+			sendNotification(pubsubClient, topicName, "Ten tu oportunidad de jugar y abrir una caja")
+		}
 	}
 }
 
-func sendPeriodicNotification(pubsubClient *pubsub.Client, topicName string) {
+func sendNotification(pubsubClient *pubsub.Client, topicName string, message string) {
 	// Enviar notificación
-	err := publishMessage(context.Background(), pubsubClient, topicName, "Revisa tus monedas de seguimiento si han cambiado")
+	err := publishMessage(context.Background(), pubsubClient, topicName, message)
 	if err != nil {
-		log.Printf("Failed to send periodic notification: %v", err)
+		log.Printf("Failed to send notification: %v", err)
 	} else {
-		log.Printf("Sent periodic notification: Revisa tus monedas de seguimiento si han cambiado")
+		log.Printf("Sent notification: %s", message)
 	}
-
-	// Enviar notificación de las monedas más rankeadas
-	topCoins := getTopRankedCoins()
-	err = publishMessage(context.Background(), pubsubClient, topicName, fmt.Sprintf("Monedas más rankeadas: %v", topCoins))
-	if err != nil {
-		log.Printf("Failed to send top ranked coins notification: %v", err)
-	} else {
-		log.Printf("Sent top ranked coins notification: %v", topCoins)
-	}
-}
-
-// Estructura para decodificar la respuesta de Binance
-type BinanceTicker struct {
-	Symbol string  `json:"symbol"`
-	Volume float64 `json:"volume,string"`
-}
-
-// Función para obtener las monedas más rankeadas desde la API de Binance
-func getTopRankedCoins() []string {
-	resp, err := http.Get("https://api.binance.com/api/v3/ticker/24hr")
-	if err != nil {
-		log.Printf("Failed to fetch data from Binance: %v", err)
-		return []string{}
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		log.Printf("Received non-200 response from Binance: %d", resp.StatusCode)
-		return []string{}
-	}
-
-	var tickers []BinanceTicker
-	if err := json.NewDecoder(resp.Body).Decode(&tickers); err != nil {
-		log.Printf("Failed to decode response from Binance: %v", err)
-		return []string{}
-	}
-
-	sort.Slice(tickers, func(i, j int) bool {
-		return tickers[i].Volume > tickers[j].Volume
-	})
-
-	topCoins := make([]string, 0, 10)
-	for i := 0; i < 10 && i < len(tickers); i++ {
-		topCoins = append(topCoins, tickers[i].Symbol)
-	}
-
-	return topCoins
 }
 
 func main() {
