@@ -68,13 +68,23 @@ func setupRouter(pubsubClient *pubsub.Client, store *MessageStore) *gin.Engine {
 	})
 
 	r.GET("/notify-check-coins", func(c *gin.Context) {
-		sendNotification(pubsubClient, "my-topic", "Revisa tus monedas de seguimiento si han cambiado")
-		c.JSON(http.StatusOK, gin.H{"status": "success"})
+		message := "Revisa tus monedas de seguimiento si han cambiado"
+		err := publishMessage(c.Request.Context(), pubsubClient, "my-topic", message)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"status": "failed", "error": err.Error()})
+		} else {
+			c.JSON(http.StatusOK, gin.H{"status": "success", "message": message})
+		}
 	})
 
 	r.GET("/notify-open-box", func(c *gin.Context) {
-		sendNotification(pubsubClient, "my-topic", "Ten tu oportunidad de jugar y abrir una caja")
-		c.JSON(http.StatusOK, gin.H{"status": "success"})
+		message := "Ten tu oportunidad de jugar y abrir una caja"
+		err := publishMessage(c.Request.Context(), pubsubClient, "my-topic", message)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"status": "failed", "error": err.Error()})
+		} else {
+			c.JSON(http.StatusOK, gin.H{"status": "success", "message": message})
+		}
 	})
 
 	return r
